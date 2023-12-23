@@ -1,0 +1,128 @@
+## connect to PostgreSQL server
+library(RPostgreSQL)
+library(tidyverse)
+
+## create connection
+con <- dbConnect(
+  PostgreSQL(),
+  host = "arjuna.db.elephantsql.com",
+  dbname = "nptjauza",
+  user = "nptjauza",
+  password = "xxxxxxxxxxxxxxxx",
+  port = 5432
+  )
+
+## create table
+customers <- tribble(
+  ~customer_id, ~customer_name, ~tel_no, ~address,
+  1, "John Smith", "02334123", "123 ABC st. Bangkok",
+  2, "Jane Doe", "02334124", "456 DEF st. Bangkok",
+  3, "Peter Jones", "02334125", "789 GHI st. Bangkok",
+  4, "Mary Brown", "02334126", "1011 JKL st. Bangkok",
+  5, "David Williams", "02334127", "1213 KLM st. Bangkok"
+)
+
+orders <- tribble(
+  ~order_id, ~invoice_date, ~customer_id, ~menu_id, ~quantity, 
+  1, "2023-10-18", 1, 1, 2, 
+  2, "2023-10-18", 1, 4, 1,
+  3, "2023-10-18", 2, 2, 1, 
+  4, "2023-10-18", 3, 3, 1, 
+  5, "2023-10-19", 4, 5, 2, 
+  6, "2023-10-19", 1, 8, 1, 
+  7, "2023-10-19", 5, 9, 2, 
+  8, "2023-10-19", 5, 2, 1, 
+  9, "2023-10-19", 2, 1, 1, 
+)
+
+menus <- tribble(
+  ~menu_id, ~ menu_name, ~size, ~price,
+  1, "magarita", "s", 199,
+  2, "magarita", "m", 249,
+  3, "magarita", "l", 299,
+  4, "supreme", "s", 229,
+  5, "supreme", "m", 279,
+  6, "supreme", "l", 329,
+  7, "pepperoni", "s", 199,
+  8, "pepperoni", "m", 249,
+  9, "pepperoni", "l", 299,
+)
+
+dbWriteTable(con, "customers", customers, row.names = FALSE)
+dbWriteTable(con, "orders", orders, row.names = FALSE)
+dbWriteTable(con, "menus", menus, row.names = FALSE)
+
+# check table
+dbListTables(con)
+
+# check data in each table
+# check customers_table
+dbGetQuery(con, "select * from customers")
+# check orders_table
+dbGetQuery(con, "select * from orders")
+# check menus_table
+dbGetQuery(con, "select * from menus")
+
+## Query database to answer question
+# Question 1: What is the total payment made by each customer in October 2023?
+dbGetQuery(con, " 
+SELECT customer_name, 
+      SUM(orders.quantity * menus.price) AS total_pay
+FROM customers
+JOIN orders
+  ON customers.customer_id = orders.customer_id
+JOIN menus
+  ON orders.menu_id = menus.menu_id
+WHERE invoice_date BETWEEN '2023-10-01' AND '2023-10-31'
+GROUP BY customers.customer_name
+ORDER BY total_pay DESC")
+
+# Question 2: Which menu generated the highest revenue in October 2023?
+dbGetQuery(con, "
+SELECT menus.menu_name, 
+      SUM(orders.quantity * menus.price) AS total_pay
+FROM orders
+JOIN menus
+  ON orders.menu_id = menus.menu_id
+WHERE invoice_date BETWEEN '2023-10-01' AND '2023-10-31'
+GROUP BY menu_name
+ORDER BY total_pay DESC")
+
+# Question 3: How many pizzas were sold from each menu in October 2023?
+dbGetQuery(con,"
+SELECT menus.menu_name, 
+      SUM(quantity) AS total_sold
+FROM orders
+JOIN menus
+  ON orders.menu_id = menus.menu_id
+WHERE invoice_date BETWEEN '2023-10-01' AND '2023-10-31'
+GROUP BY menu_name
+ORDER BY total_sold DESC")
+
+# Question 4: What is the average spending per customer in October 2023?
+dbGetQuery(con, " 
+SELECT customer_name, 
+      SUM(orders.quantity * menus.price) / count(orders) AS average_spending
+FROM customers
+JOIN orders
+  ON customers.customer_id = orders.customer_id
+JOIN menus
+  ON orders.menu_id = menus.menu_id
+WHERE invoice_date BETWEEN '2023-10-01' AND '2023-10-31'
+GROUP BY customers.customer_name
+ORDER BY average_spending DESC")
+
+# Question 5: What is the total daily sale in October 2023?
+dbGetQuery(con, " 
+SELECT invoice_date, 
+      SUM(orders.quantity * menus.price) AS total_revenue
+FROM customers
+JOIN orders
+  ON customers.customer_id = orders.customer_id
+JOIN menus
+  ON orders.menu_id = menus.menu_id
+WHERE invoice_date BETWEEN '2023-10-01' AND '2023-10-31'
+GROUP BY invoice_date")
+
+## close connection
+dbDisconnect(con)
